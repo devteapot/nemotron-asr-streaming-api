@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        BASE_IMAGE: nvcr.io/nvidia/nemo:26.04
+        BASE_IMAGE: nvcr.io/nvidia/nemo:25.11.01
     image: nemotron-asr-streaming-api:0.1.0
     ports:
       - "8000:8000"
@@ -11,6 +11,7 @@ services:
     shm_size: "8gb"
     environment:
       NEMO_MODEL_PATH: /models/nemotron-3.5-asr-streaming-0.6b.nemo
+      SILERO_VAD_MODEL_PATH: /opt/nemotron-asr/silero_vad.jit
       TARGET_LANG: auto
       ATT_CONTEXT_SIZE: "[56,3]"
       STRIP_LANG_TAGS: "true"

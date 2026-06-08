@@ -1,10 +1,13 @@
-ARG BASE_IMAGE=nvcr.io/nvidia/nemo:26.04
+ARG BASE_IMAGE=nvcr.io/nvidia/nemo:25.11.01
 FROM ${BASE_IMAGE}
+
+ARG SILERO_VAD_VERSION=6.2.1
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PORT=8000 \
     NEMO_MODEL_PATH=/models/nemotron-3.5-asr-streaming-0.6b.nemo \
+    SILERO_VAD_MODEL_PATH=/opt/nemotron-asr/silero_vad.jit \
     TARGET_LANG=auto \
     ATT_CONTEXT_SIZE='[56,3]' \
     STRIP_LANG_TAGS=true \
@@ -24,12 +27,14 @@ COPY pyproject.toml README.md /app/
 COPY src /app/src
 COPY scripts /app/scripts
 
-RUN python -c "import torch; import nemo.collections.asr as nemo_asr; print('base torch', torch.__version__, 'cuda', torch.version.cuda); print('base nemo_asr', nemo_asr.__name__)"
+RUN python -c "import numpy, torch; import nemo.collections.asr as nemo_asr; print('base torch', torch.__version__, 'cuda', torch.version.cuda); print('base numpy', numpy.__version__); print('base nemo_asr', nemo_asr.__name__)"
 
-RUN python -m pip install "fastapi>=0.115" "uvicorn[standard]>=0.30" "websockets>=13.0"
+RUN python -m pip install "fastapi>=0.115" "uvicorn>=0.30" "websockets>=13.0"
 
-RUN python -m pip install --no-deps "silero-vad>=5.1" \
-    && python -c "import importlib.util; from pathlib import Path; spec = importlib.util.find_spec('silero_vad'); assert spec and spec.submodule_search_locations; model = Path(next(iter(spec.submodule_search_locations))) / 'data' / 'silero_vad.jit'; assert model.exists(), model; print('silero_model', model)"
+RUN mkdir -p "$(dirname "${SILERO_VAD_MODEL_PATH}")" \
+    && python -m pip download --no-deps --only-binary=:all: --dest /tmp/silero-vad "silero-vad==${SILERO_VAD_VERSION}" \
+    && python -c "import os, zipfile; from pathlib import Path; wheel = next(Path('/tmp/silero-vad').glob('silero_vad-*.whl')); source = 'silero_vad/data/silero_vad.jit'; target = Path(os.environ['SILERO_VAD_MODEL_PATH']); target.write_bytes(zipfile.ZipFile(wheel).read(source)); print('silero_model', target, target.stat().st_size)" \
+    && rm -rf /tmp/silero-vad
 
 RUN python -m pip install --no-deps ".[client]"
 

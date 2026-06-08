@@ -4,12 +4,13 @@ import base64
 from dataclasses import dataclass
 
 import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 from nemotron_asr_service.app import create_app
 from nemotron_asr_service.backend import TranscriptUpdate
 from nemotron_asr_service.config import AsrSettings, Settings, VadSettings
-from nemotron_asr_service.vad import VadUpdate
+from nemotron_asr_service.vad import VadUpdate, _load_silero_model
 
 
 class FakeBackend:
@@ -147,6 +148,19 @@ def test_session_limit_rejects_second_connection():
                 event = second.receive_json()
                 assert event["type"] == "error"
                 assert event["error"]["type"] == "session_limit_reached"
+
+
+def test_settings_reads_silero_vad_model_path(monkeypatch):
+    monkeypatch.setenv("SILERO_VAD_MODEL_PATH", "/opt/nemotron-asr/silero_vad.jit")
+
+    settings = Settings.from_env()
+
+    assert settings.vad.model_path == "/opt/nemotron-asr/silero_vad.jit"
+
+
+def test_missing_silero_vad_model_path_has_clear_error(tmp_path):
+    with pytest.raises(FileNotFoundError, match="SILERO_VAD_MODEL_PATH does not exist"):
+        _load_silero_model(str(tmp_path / "missing.jit"))
 
 
 def _settings(max_sessions: int = 1, turn_detection: str | None = "server_vad") -> Settings:

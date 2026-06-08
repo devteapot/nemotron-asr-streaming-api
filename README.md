@@ -2,9 +2,11 @@
 
 Thin WebSocket service for running NVIDIA Nemotron 3.5 ASR Streaming from a DGX Spark or other NVIDIA GPU node. The service exposes a small OpenAI-Realtime-like transcription API and keeps model inference NeMo-native.
 
-The Docker image is based on `nvcr.io/nvidia/nemo:26.04`, the latest published
-NeMo container tag currently available on NGC. The base image is configurable
-with `--build-arg BASE_IMAGE=...` when NVIDIA publishes a newer compatible tag.
+The Docker image is based on `nvcr.io/nvidia/nemo:25.11.01`, the prebuilt NeMo
+container currently documented by the NeMo Toolkit package. The base image is
+configurable with `--build-arg BASE_IMAGE=...` when NVIDIA publishes a newer
+compatible tag. The image uses the NeMo/PyTorch stack from that base container;
+it does not reinstall NeMo, Torch, TorchAudio, or TorchVision.
 
 ## Architecture
 
@@ -16,7 +18,7 @@ Reachy / runtime
 
 DGX Spark container
   FastAPI WebSocket adapter
-  Silero server-side VAD
+  Silero server-side VAD loaded from a bundled TorchScript model file
   NeMo cache-aware Nemotron ASR
 ```
 
@@ -80,6 +82,7 @@ curl http://localhost:8000/healthz
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `NEMO_MODEL_PATH` | `/models/nemotron-3.5-asr-streaming-0.6b.nemo` | Local mounted `.nemo` path. |
+| `SILERO_VAD_MODEL_PATH` | `/opt/nemotron-asr/silero_vad.jit` | Server VAD TorchScript model path. The Docker image bundles this file. |
 | `TARGET_LANG` | `auto` | Nemotron prompt language, for example `en-US`, `it-IT`, or `auto`. |
 | `ATT_CONTEXT_SIZE` | `[56,3]` | NeMo streaming context; `[56,3]` is 320 ms. |
 | `STRIP_LANG_TAGS` | `true` | Removes terminal `<lang-LOCALE>` tags from transcript text. |
@@ -128,3 +131,11 @@ python scripts/stream_wav.py --url ws://localhost:8000/v1/realtime --wav ./sampl
 ```
 
 The WAV must be mono PCM16 at 16 kHz.
+
+For local non-container server runs with `TURN_DETECTION=server_vad`, either set
+`SILERO_VAD_MODEL_PATH` to a local `silero_vad.jit` file or install the optional
+VAD package data with:
+
+```bash
+python -m pip install ".[vad]"
+```

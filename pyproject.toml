@@ -6,12 +6,11 @@ build-backend = "setuptools.build_meta"
 name = "nemotron-asr-streaming-api"
 version = "0.1.0"
 description = "OpenAI-Realtime-like WebSocket wrapper for NVIDIA Nemotron 3.5 ASR streaming via NeMo."
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115",
     "numpy>=1.26",
-    "silero-vad>=5.1",
-    "uvicorn[standard]>=0.30",
+    "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
@@ -21,6 +20,9 @@ test = [
 ]
 client = [
     "websockets>=13.0",
+]
+vad = [
+    "silero-vad>=5.1",
 ]
 
 [tool.setuptools.packages.find]

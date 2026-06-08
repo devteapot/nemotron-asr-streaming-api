@@ -22,6 +22,7 @@ class VadSettings:
     prefix_padding_ms: int = 300
     silence_duration_ms: int = 500
     sample_rate: int = 16000
+    model_path: str | None = None
 
     def updated(self, **kwargs: object) -> "VadSettings":
         return replace(self, **kwargs)
@@ -78,6 +79,7 @@ class Settings:
                 prefix_padding_ms=_env_int("VAD_PREFIX_PADDING_MS", 300),
                 silence_duration_ms=_env_int("VAD_SILENCE_DURATION_MS", 500),
                 sample_rate=sample_rate,
+                model_path=os.environ.get("SILERO_VAD_MODEL_PATH") or None,
             ),
             turn_detection=_parse_turn_detection(os.environ.get("TURN_DETECTION", "server_vad")),
         )

@@ -32,7 +32,7 @@ class SileroVadEngine:
         if self.sample_rate not in {8000, 16000}:
             raise ValueError("Silero VAD supports only 8000 or 16000 Hz audio")
         self.window_size = 512 if self.sample_rate == 16000 else 256
-        self.model = _load_silero_model()
+        self.model = _load_silero_model(settings.model_path)
         self.reset()
 
     def reset(self) -> None:
@@ -127,8 +127,18 @@ class SileroVadEngine:
                 self.pre_speech_samples -= excess
 
 
-def _load_silero_model():
+def _load_silero_model(model_path: str | None = None):
     import importlib.util
+
+    if model_path:
+        path = Path(model_path)
+        if not path.exists():
+            raise FileNotFoundError(f"SILERO_VAD_MODEL_PATH does not exist: {path}")
+
+        import torch
+
+        torch.set_num_threads(1)
+        return torch.jit.load(str(path), map_location="cpu").eval()
 
     import torch
 
@@ -140,7 +150,7 @@ def _load_silero_model():
             torch.set_num_threads(1)
             return torch.jit.load(str(model_path), map_location="cpu").eval()
 
-    raise RuntimeError("silero_vad package data is missing silero_vad.jit")
+    raise RuntimeError("Silero VAD model not found. Set SILERO_VAD_MODEL_PATH or install the silero-vad package.")
 
 
 def _samples_to_ms(samples: int, sample_rate: int) -> int:
