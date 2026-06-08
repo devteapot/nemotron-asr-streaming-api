@@ -22,10 +22,16 @@ Reachy / runtime
 DGX Spark container
   FastAPI WebSocket adapter
   Silero server-side VAD loaded from a bundled TorchScript model file
-  NeMo cache-aware Nemotron ASR
+  NeMo cache-aware Nemotron ASR over accumulated turn audio
 ```
 
 Server-side VAD is the default, matching OpenAI Realtime's provider-owned turn detection pattern. Manual commit mode is also supported by setting turn detection to `null`.
+
+For transcript quality, incoming PCM chunks are accumulated per turn and
+reprocessed through NeMo's cache-aware buffer at a throttled interval. NeMo's
+buffer performs feature extraction when audio is appended, so preprocessing tiny
+independent WebSocket chunks produces poor recognition. `PARTIAL_INTERVAL_MS`
+controls how often partial transcripts are recomputed during an active turn.
 
 ## Run On DGX Spark
 
@@ -104,6 +110,7 @@ curl http://localhost:8000/healthz
 | `VAD_THRESHOLD` | `0.6` | Silero speech threshold. |
 | `VAD_PREFIX_PADDING_MS` | `300` | Audio retained before speech start. |
 | `VAD_SILENCE_DURATION_MS` | `500` | Silence needed before speech stop. |
+| `PARTIAL_INTERVAL_MS` | `500` | Minimum new audio before recomputing a partial transcript from accumulated turn audio. |
 | `MAX_SESSIONS` | `1` | Concurrent WebSocket sessions. |
 
 ## WebSocket API

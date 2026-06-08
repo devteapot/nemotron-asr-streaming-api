@@ -88,6 +88,7 @@ class NemoStreamingBackend:
             config=config,
             sample_rate=self.settings.sample_rate,
             final_padding_ms=self.settings.final_padding_ms,
+            partial_interval_ms=self.settings.partial_interval_ms,
         )
 
     def _apply_model_config(self, config: AsrSettings) -> None:
@@ -118,6 +119,7 @@ class NemoStreamingSession:
         config: AsrSettings,
         sample_rate: int,
         final_padding_ms: int,
+        partial_interval_ms: int,
     ) -> None:
         self.model = model
         self.torch = torch_module
@@ -126,7 +128,7 @@ class NemoStreamingSession:
         self.config = config
         self.sample_rate = sample_rate
         self.final_padding_ms = final_padding_ms
-        self._stream_id: int | None = None
+        self.partial_interval_samples = max(1, int(sample_rate * partial_interval_ms / 1000))
         self._last_text = ""
         self._has_audio = False
         self.reset()
@@ -140,22 +142,22 @@ class NemoStreamingSession:
             return None
 
         audio = np.asarray(audio, dtype=np.float32)
-        if self._stream_id is None:
-            self.buffer.append_audio(audio, stream_id=-1)
-            self._stream_id = 0
-        else:
-            self.buffer.append_audio(audio, stream_id=self._stream_id)
-
+        self._audio_segments.append(audio.copy())
+        self._audio_samples += audio.size
         self._has_audio = True
-        return self._drain(final=False)
+        if self._audio_samples - self._last_partial_samples < self.partial_interval_samples:
+            return None
+        self._last_partial_samples = self._audio_samples
+        return self._transcribe_accumulated()
 
     def finalize(self) -> TranscriptUpdate:
         if self._has_audio and self.final_padding_ms > 0:
             padding_samples = int(self.sample_rate * self.final_padding_ms / 1000)
             if padding_samples > 0:
-                self.append_audio(np.zeros(padding_samples, dtype=np.float32))
+                self._audio_segments.append(np.zeros(padding_samples, dtype=np.float32))
+                self._audio_samples += padding_samples
 
-        update = self._drain(final=True)
+        update = self._transcribe_accumulated()
         text = update.text if update is not None else self._last_text
         text, language = _extract_language(text)
         result = TranscriptUpdate(text=text, is_final=True, language=language)
@@ -163,45 +165,54 @@ class NemoStreamingSession:
         return result
 
     def reset(self) -> None:
-        self.buffer = self.buffer_cls(model=self.model, online_normalization=False, pad_and_drop_preencoded=False)
-        self._stream_id = None
         self._last_text = ""
         self._has_audio = False
-        self._step_num = 0
-        self._pred_out_stream = None
-        self._previous_hypotheses = None
+        self._audio_segments: list[np.ndarray] = []
+        self._audio_samples = 0
+        self._last_partial_samples = 0
+
+    def _transcribe_accumulated(self) -> TranscriptUpdate | None:
+        if not self._audio_segments:
+            return None
+
+        audio = np.concatenate(self._audio_segments).astype(np.float32, copy=False)
+        buffer = self.buffer_cls(model=self.model, online_normalization=False, pad_and_drop_preencoded=False)
+        buffer.append_audio(audio, stream_id=-1)
+        return self._drain_buffer(buffer)
+
+    def _drain_buffer(self, buffer) -> TranscriptUpdate | None:
+        latest: TranscriptUpdate | None = None
+        pred_out_stream = None
+        previous_hypotheses = None
         (
-            self._cache_last_channel,
-            self._cache_last_time,
-            self._cache_last_channel_len,
+            cache_last_channel,
+            cache_last_time,
+            cache_last_channel_len,
         ) = self.model.encoder.get_initial_cache_state(batch_size=1)
 
-    def _drain(self, *, final: bool) -> TranscriptUpdate | None:
-        latest: TranscriptUpdate | None = None
-        for chunk_audio, chunk_lengths in self.buffer:
+        for step_num, (chunk_audio, chunk_lengths) in enumerate(buffer):
             chunk_audio = chunk_audio.to(self.compute_dtype)
             with self.torch.inference_mode():
                 (
-                    self._pred_out_stream,
+                    pred_out_stream,
                     transcribed_texts,
-                    self._cache_last_channel,
-                    self._cache_last_time,
-                    self._cache_last_channel_len,
-                    self._previous_hypotheses,
+                    cache_last_channel,
+                    cache_last_time,
+                    cache_last_channel_len,
+                    previous_hypotheses,
                 ) = self.model.conformer_stream_step(
                     processed_signal=chunk_audio,
                     processed_signal_length=chunk_lengths,
-                    cache_last_channel=self._cache_last_channel,
-                    cache_last_time=self._cache_last_time,
-                    cache_last_channel_len=self._cache_last_channel_len,
-                    keep_all_outputs=self.buffer.is_buffer_empty() or final,
-                    previous_hypotheses=self._previous_hypotheses,
-                    previous_pred_out=self._pred_out_stream,
-                    drop_extra_pre_encoded=self._drop_extra_pre_encoded(),
+                    cache_last_channel=cache_last_channel,
+                    cache_last_time=cache_last_time,
+                    cache_last_channel_len=cache_last_channel_len,
+                    keep_all_outputs=buffer.is_buffer_empty(),
+                    previous_hypotheses=previous_hypotheses,
+                    previous_pred_out=pred_out_stream,
+                    drop_extra_pre_encoded=self._drop_extra_pre_encoded(step_num),
                     return_transcription=True,
                 )
 
-            self._step_num += 1
             texts = _extract_transcriptions(transcribed_texts)
             if not texts:
                 continue
@@ -211,8 +222,8 @@ class NemoStreamingSession:
                 latest = TranscriptUpdate(text=text, is_final=False)
         return latest
 
-    def _drop_extra_pre_encoded(self) -> int:
-        if self._step_num == 0:
+    def _drop_extra_pre_encoded(self, step_num: int) -> int:
+        if step_num == 0:
             return 0
         return int(getattr(self.model.encoder.streaming_cfg, "drop_extra_pre_encoded", 0))
 

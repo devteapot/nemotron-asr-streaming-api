@@ -54,6 +54,7 @@ class Settings:
     sample_rate: int = 16000
     max_sessions: int = 1
     final_padding_ms: int = 200
+    partial_interval_ms: int = 500
     asr: AsrSettings = AsrSettings(att_context_size=[56, 3])
     vad: VadSettings = VadSettings()
     turn_detection: str | None = "server_vad"
@@ -69,6 +70,7 @@ class Settings:
             sample_rate=sample_rate,
             max_sessions=_env_int("MAX_SESSIONS", 1),
             final_padding_ms=_env_int("FINAL_PADDING_MS", 200),
+            partial_interval_ms=_env_int("PARTIAL_INTERVAL_MS", 500),
             asr=AsrSettings(
                 target_lang=os.environ.get("TARGET_LANG", "auto"),
                 att_context_size=_parse_att_context(os.environ.get("ATT_CONTEXT_SIZE", "[56,3]")),

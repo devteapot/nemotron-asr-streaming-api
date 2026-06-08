@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from contextlib import nullcontext
 from dataclasses import dataclass
 
 import numpy as np
@@ -8,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from nemotron_asr_service.app import create_app
-from nemotron_asr_service.backend import TranscriptUpdate
+from nemotron_asr_service.backend import NemoStreamingSession, TranscriptUpdate
 from nemotron_asr_service.config import AsrSettings, Settings, VadSettings
 from nemotron_asr_service.vad import VadUpdate, _load_silero_model
 
@@ -170,6 +171,26 @@ def test_silero_vad_loader_reads_env_model_path(monkeypatch, tmp_path):
         _load_silero_model()
 
 
+def test_nemo_streaming_session_reprocesses_accumulated_audio_for_partials():
+    session = NemoStreamingSession(
+        model=FakeNemoModel(),
+        torch_module=FakeTorchModule(),
+        buffer_cls=FakeNemoBuffer,
+        compute_dtype="float32",
+        config=AsrSettings(),
+        sample_rate=16000,
+        final_padding_ms=0,
+        partial_interval_ms=1000,
+    )
+
+    assert session.append_audio(np.ones(8000, dtype=np.float32)) is None
+    update = session.append_audio(np.ones(8000, dtype=np.float32))
+
+    assert update is not None
+    assert update.text == "16000 samples"
+    assert session.finalize().text == "16000 samples"
+
+
 def _settings(max_sessions: int = 1, turn_detection: str | None = "server_vad") -> Settings:
     return Settings(
         model_path="/tmp/fake.nemo",
@@ -183,3 +204,49 @@ def _settings(max_sessions: int = 1, turn_detection: str | None = "server_vad") 
 def _audio(samples: np.ndarray) -> str:
     pcm = (np.clip(samples, -1, 1) * 32767).astype("<i2")
     return base64.b64encode(pcm.tobytes()).decode("ascii")
+
+
+class FakeTorchModule:
+    def inference_mode(self):
+        return nullcontext()
+
+
+class FakeNemoEncoder:
+    streaming_cfg = type("StreamingCfg", (), {"drop_extra_pre_encoded": 1})()
+
+    def get_initial_cache_state(self, batch_size: int):
+        return None, None, None
+
+
+class FakeNemoModel:
+    encoder = FakeNemoEncoder()
+
+    def conformer_stream_step(self, *, processed_signal, **_kwargs):
+        return None, [f"{processed_signal.samples} samples"], None, None, None, None
+
+
+class FakeNemoTensor:
+    def __init__(self, samples: int) -> None:
+        self.samples = samples
+
+    def to(self, _dtype):
+        return self
+
+
+class FakeNemoBuffer:
+    def __init__(self, **_kwargs) -> None:
+        self.audio: np.ndarray | None = None
+        self._empty = False
+
+    def append_audio(self, audio: np.ndarray, stream_id: int = -1):
+        self.audio = np.asarray(audio)
+        return None, None, 0
+
+    def __iter__(self):
+        if self.audio is None:
+            return
+        self._empty = True
+        yield FakeNemoTensor(self.audio.size), None
+
+    def is_buffer_empty(self):
+        return self._empty
