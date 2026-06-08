@@ -1,6 +1,5 @@
-FROM nvcr.io/nvidia/pytorch:26.05-py3
-
-ARG NEMO_COMMIT=160a7428769067f24ae45e04030ce738d0407727
+ARG BASE_IMAGE=nvcr.io/nvidia/nemo:26.06
+FROM ${BASE_IMAGE}
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -25,13 +24,11 @@ COPY pyproject.toml README.md /app/
 COPY src /app/src
 COPY scripts /app/scripts
 
-RUN python -m pip install --upgrade pip "setuptools<82" wheel \
-    && python -m pip install Cython packaging \
-    && python -m pip install "nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git@${NEMO_COMMIT}" \
-    && python -m pip install ".[client]" \
-    && python -m pip uninstall -y torchaudio \
-    && python -c "import importlib.util; assert importlib.util.find_spec('torchaudio') is None, 'torchaudio must stay uninstalled'" \
-    && python -c "import torch; import silero_vad; import nemo.collections.asr as nemo_asr; print('torch', torch.__version__, 'cuda', torch.version.cuda); print('silero_vad', silero_vad.__name__); print('nemo_asr', nemo_asr.__name__)"
+RUN python -m pip install "fastapi>=0.115" "uvicorn[standard]>=0.30" "websockets>=13.0" \
+    && python -m pip install --no-deps "silero-vad>=5.1" \
+    && python -m pip install --no-deps ".[client]" \
+    && python -c "import torch; import nemo.collections.asr as nemo_asr; print('torch', torch.__version__, 'cuda', torch.version.cuda); print('nemo_asr', nemo_asr.__name__)" \
+    && python -c "import importlib.util; from pathlib import Path; spec = importlib.util.find_spec('silero_vad'); assert spec and spec.submodule_search_locations; model = Path(next(iter(spec.submodule_search_locations))) / 'data' / 'silero_vad.jit'; assert model.exists(), model; print('silero_model', model)"
 
 EXPOSE 8000
 

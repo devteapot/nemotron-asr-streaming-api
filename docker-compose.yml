@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        NEMO_COMMIT: 160a7428769067f24ae45e04030ce738d0407727
+        BASE_IMAGE: nvcr.io/nvidia/nemo:26.06
     image: nemotron-asr-streaming-api:0.1.0
     ports:
       - "8000:8000"

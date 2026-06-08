@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 import numpy as np
@@ -127,20 +128,19 @@ class SileroVadEngine:
 
 
 def _load_silero_model():
-    try:
-        from silero_vad import load_silero_vad
+    import importlib.util
 
-        return load_silero_vad(onnx=False)
-    except Exception:
-        import torch
+    import torch
 
-        model, _ = torch.hub.load(
-            repo_or_dir="snakers4/silero-vad",
-            model="silero_vad",
-            trust_repo=True,
-            skip_validation=True,
-        )
-        return model
+    spec = importlib.util.find_spec("silero_vad")
+    if spec and spec.submodule_search_locations:
+        package_dir = Path(next(iter(spec.submodule_search_locations)))
+        model_path = package_dir / "data" / "silero_vad.jit"
+        if model_path.exists():
+            torch.set_num_threads(1)
+            return torch.jit.load(str(model_path), map_location="cpu").eval()
+
+    raise RuntimeError("silero_vad package data is missing silero_vad.jit")
 
 
 def _samples_to_ms(samples: int, sample_rate: int) -> int:
