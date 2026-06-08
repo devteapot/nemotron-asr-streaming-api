@@ -1,0 +1,23 @@
+services:
+  nemotron-asr:
+    build:
+      context: .
+      args:
+        NEMO_COMMIT: 160a7428769067f24ae45e04030ce738d0407727
+    image: nemotron-asr-streaming-api:0.1.0
+    ports:
+      - "8000:8000"
+    gpus: all
+    shm_size: "8gb"
+    environment:
+      NEMO_MODEL_PATH: /models/nemotron-3.5-asr-streaming-0.6b.nemo
+      TARGET_LANG: auto
+      ATT_CONTEXT_SIZE: "[56,3]"
+      STRIP_LANG_TAGS: "true"
+      TURN_DETECTION: server_vad
+      VAD_THRESHOLD: "0.6"
+      VAD_PREFIX_PADDING_MS: "300"
+      VAD_SILENCE_DURATION_MS: "500"
+      MAX_SESSIONS: "1"
+    volumes:
+      - /srv/models/nemotron:/models:ro
