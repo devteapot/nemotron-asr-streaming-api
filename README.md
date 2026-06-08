@@ -34,6 +34,37 @@ docker run --rm --gpus all \
   nemotron-asr-streaming-api:0.1.0
 ```
 
+`NEMO_MODEL_PATH` is evaluated inside the container, not on the host. If the
+host file is:
+
+```text
+/srv/models/nvidia/nemotron-3.5-asr-streaming-0.6b/nemotron-3.5-asr-streaming-0.6b.nemo
+```
+
+then either mount the host model tree at the same path:
+
+```bash
+docker run --rm --gpus all \
+  --name nemotron-asr \
+  --shm-size=8g \
+  -p 8000:8000 \
+  -v /srv/models:/srv/models:ro \
+  -e NEMO_MODEL_PATH=/srv/models/nvidia/nemotron-3.5-asr-streaming-0.6b/nemotron-3.5-asr-streaming-0.6b.nemo \
+  nemotron-asr-streaming-api:0.1.0
+```
+
+or mount just the model directory to `/models`:
+
+```bash
+docker run --rm --gpus all \
+  --name nemotron-asr \
+  --shm-size=8g \
+  -p 8000:8000 \
+  -v /srv/models/nvidia/nemotron-3.5-asr-streaming-0.6b:/models:ro \
+  -e NEMO_MODEL_PATH=/models/nemotron-3.5-asr-streaming-0.6b.nemo \
+  nemotron-asr-streaming-api:0.1.0
+```
+
 Health is ready only after model load, VAD load, and warmup:
 
 ```bash

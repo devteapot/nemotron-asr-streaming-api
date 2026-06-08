@@ -49,7 +49,12 @@ class NemoStreamingBackend:
     def load(self) -> None:
         model_path = Path(self.settings.model_path)
         if not model_path.exists():
-            raise FileNotFoundError(f"NEMO_MODEL_PATH does not exist: {model_path}")
+            raise FileNotFoundError(
+                "NEMO_MODEL_PATH does not exist inside the container: "
+                f"{model_path}. Docker volume mounts translate host paths to "
+                "container paths; for example, with '-v /srv/models:/models:ro' "
+                "use a NEMO_MODEL_PATH beginning with '/models'."
+            )
         if model_path.suffix != ".nemo":
             raise ValueError(f"NEMO_MODEL_PATH must point to a .nemo file: {model_path}")
 
