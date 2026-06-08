@@ -25,11 +25,12 @@ COPY pyproject.toml README.md /app/
 COPY src /app/src
 COPY scripts /app/scripts
 
-RUN cat /etc/pip/constraint.txt \
-    && python -m pip install -c /etc/pip/constraint.txt "setuptools<82" wheel Cython packaging \
-    && python -m pip install -c /etc/pip/constraint.txt --no-build-isolation "nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git@${NEMO_COMMIT}" \
-    && python -m pip install -c /etc/pip/constraint.txt ".[client]" \
-    && python -c "import torch, torchaudio; print('torch', torch.__version__, 'cuda', torch.version.cuda); print('torchaudio', torchaudio.__version__)"
+RUN python -m pip install --upgrade pip "setuptools<82" wheel \
+    && python -m pip install Cython packaging \
+    && python -m pip install "nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git@${NEMO_COMMIT}" \
+    && python -m pip uninstall -y torchaudio \
+    && python -m pip install ".[client]" \
+    && python -c "import torch; import nemo.collections.asr as nemo_asr; print('torch', torch.__version__, 'cuda', torch.version.cuda); print('nemo_asr', nemo_asr.__name__)"
 
 EXPOSE 8000
 
