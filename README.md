@@ -3,10 +3,13 @@
 Thin WebSocket service for running NVIDIA Nemotron 3.5 ASR Streaming from a DGX Spark or other NVIDIA GPU node. The service exposes a small OpenAI-Realtime-like transcription API and keeps model inference NeMo-native.
 
 The Docker image is based on `nvcr.io/nvidia/nemo:25.11.01`, the prebuilt NeMo
-container currently documented by the NeMo Toolkit package. The base image is
-configurable with `--build-arg BASE_IMAGE=...` when NVIDIA publishes a newer
-compatible tag. The image uses the NeMo/PyTorch stack from that base container;
-it does not reinstall NeMo, Torch, TorchAudio, or TorchVision.
+container currently documented by the NeMo Toolkit package. The model card lists
+this model's runtime engine as NeMo 26.06 and recommends NeMo from GitHub
+`main`, while the available container does not include the prompt-conditioned
+RNN-T module required by the checkpoint. The image therefore keeps CUDA/PyTorch
+from the base container, replaces `/opt/NeMo` with a pinned NeMo source ref that
+contains `EncDecRNNTBPEModelWithPrompt`, and installs that source with
+`--no-deps` so Torch, TorchAudio, and TorchVision are not replaced.
 
 ## Architecture
 
@@ -39,6 +42,17 @@ docker run --rm --gpus all \
   -e NEMO_MODEL_PATH=/models/nemotron-3.5-asr-streaming-0.6b.nemo \
   nemotron-asr-streaming-api:0.1.0
 ```
+
+The default build arguments are:
+
+```text
+BASE_IMAGE=nvcr.io/nvidia/nemo:25.11.01
+NEMO_SOURCE_REF=d947ef7be814e3034dfed298f0c1c3c2137bced5
+SILERO_VAD_VERSION=6.2.1
+```
+
+Override `NEMO_SOURCE_REF` only when moving to a newer NeMo source revision or
+to a published NeMo container that already includes the model class.
 
 `NEMO_MODEL_PATH` is evaluated inside the container, not on the host. If the
 host file is:

@@ -1,6 +1,7 @@
 ARG BASE_IMAGE=nvcr.io/nvidia/nemo:25.11.01
 FROM ${BASE_IMAGE}
 
+ARG NEMO_SOURCE_REF=d947ef7be814e3034dfed298f0c1c3c2137bced5
 ARG SILERO_VAD_VERSION=6.2.1
 
 ENV PYTHONUNBUFFERED=1 \
@@ -23,7 +24,10 @@ COPY pyproject.toml README.md /app/
 COPY src /app/src
 COPY scripts /app/scripts
 
-RUN python -c "import numpy, torch; import nemo.collections.asr as nemo_asr; print('base torch', torch.__version__, 'cuda', torch.version.cuda); print('base numpy', numpy.__version__); print('base nemo_asr', nemo_asr.__name__)"
+RUN python /app/scripts/install_nemo_source.py "${NEMO_SOURCE_REF}" /opt/NeMo \
+    && python -m pip install --no-deps --no-build-isolation /opt/NeMo
+
+RUN python -c "import numpy, torch; import nemo, nemo.collections.asr as nemo_asr; from nemo.collections.asr.models.rnnt_bpe_models_prompt import EncDecRNNTBPEModelWithPrompt; print('base torch', torch.__version__, 'cuda', torch.version.cuda); print('base numpy', numpy.__version__); print('nemo_source', nemo.__file__); print('prompt_rnnt', EncDecRNNTBPEModelWithPrompt.__name__); print('base nemo_asr', nemo_asr.__name__)"
 
 RUN python -m pip install "fastapi>=0.115" "uvicorn>=0.30" "websockets>=13.0"
 

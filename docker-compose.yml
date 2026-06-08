@@ -4,6 +4,7 @@ services:
       context: .
       args:
         BASE_IMAGE: nvcr.io/nvidia/nemo:25.11.01
+        NEMO_SOURCE_REF: d947ef7be814e3034dfed298f0c1c3c2137bced5
     image: nemotron-asr-streaming-api:0.1.0
     ports:
       - "8000:8000"
