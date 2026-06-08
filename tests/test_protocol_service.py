@@ -163,6 +163,13 @@ def test_missing_silero_vad_model_path_has_clear_error(tmp_path):
         _load_silero_model(str(tmp_path / "missing.jit"))
 
 
+def test_silero_vad_loader_reads_env_model_path(monkeypatch, tmp_path):
+    monkeypatch.setenv("SILERO_VAD_MODEL_PATH", str(tmp_path / "missing.jit"))
+
+    with pytest.raises(FileNotFoundError, match="SILERO_VAD_MODEL_PATH does not exist"):
+        _load_silero_model()
+
+
 def _settings(max_sessions: int = 1, turn_detection: str | None = "server_vad") -> Settings:
     return Settings(
         model_path="/tmp/fake.nemo",

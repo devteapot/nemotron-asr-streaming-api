@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -130,6 +131,7 @@ class SileroVadEngine:
 def _load_silero_model(model_path: str | None = None):
     import importlib.util
 
+    model_path = model_path or os.environ.get("SILERO_VAD_MODEL_PATH")
     if model_path:
         path = Path(model_path)
         if not path.exists():
