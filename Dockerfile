@@ -25,14 +25,10 @@ COPY pyproject.toml README.md /app/
 COPY src /app/src
 COPY scripts /app/scripts
 
-RUN for pkg in torch torchaudio torchvision; do \
-        python -c "import importlib.metadata as m; print('${pkg}=='+m.version('${pkg}'))" 2>/dev/null || true; \
-    done > /tmp/ngc-torch-constraints.txt \
-    && cat /tmp/ngc-torch-constraints.txt \
-    && python -m pip install --upgrade pip "setuptools<82" wheel \
-    && python -m pip install -c /tmp/ngc-torch-constraints.txt Cython packaging \
-    && python -m pip install -c /tmp/ngc-torch-constraints.txt "nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git@${NEMO_COMMIT}" \
-    && python -m pip install -c /tmp/ngc-torch-constraints.txt ".[client]" \
+RUN cat /etc/pip/constraint.txt \
+    && python -m pip install -c /etc/pip/constraint.txt "setuptools<82" wheel Cython packaging \
+    && python -m pip install -c /etc/pip/constraint.txt --no-build-isolation "nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git@${NEMO_COMMIT}" \
+    && python -m pip install -c /etc/pip/constraint.txt ".[client]" \
     && python -c "import torch, torchaudio; print('torch', torch.__version__, 'cuda', torch.version.cuda); print('torchaudio', torchaudio.__version__)"
 
 EXPOSE 8000
