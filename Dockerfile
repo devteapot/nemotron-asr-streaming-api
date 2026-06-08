@@ -1,4 +1,4 @@
-FROM --platform=$TARGETPLATFORM nvcr.io/nvidia/pytorch:26.05-py3
+FROM nvcr.io/nvidia/pytorch:26.05-py3
 
 ARG NEMO_COMMIT=160a7428769067f24ae45e04030ce738d0407727
 
@@ -25,9 +25,9 @@ COPY pyproject.toml README.md /app/
 COPY src /app/src
 COPY scripts /app/scripts
 
-RUN python -m pip install --upgrade pip setuptools wheel \
+RUN python -m pip install --upgrade pip "setuptools<82" wheel \
     && python -m pip install Cython packaging \
-    && python -m pip install "git+https://github.com/NVIDIA/NeMo.git@${NEMO_COMMIT}#egg=nemo_toolkit[asr]" \
+    && python -m pip install "nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git@${NEMO_COMMIT}" \
     && python -m pip install ".[client]"
 
 EXPOSE 8000
