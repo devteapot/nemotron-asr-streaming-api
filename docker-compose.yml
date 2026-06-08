@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        BASE_IMAGE: nvcr.io/nvidia/nemo:26.06
+        BASE_IMAGE: nvcr.io/nvidia/nemo:26.04
     image: nemotron-asr-streaming-api:0.1.0
     ports:
       - "8000:8000"

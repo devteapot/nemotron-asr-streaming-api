@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=nvcr.io/nvidia/nemo:26.06
+ARG BASE_IMAGE=nvcr.io/nvidia/nemo:26.04
 FROM ${BASE_IMAGE}
 
 ENV PYTHONUNBUFFERED=1 \

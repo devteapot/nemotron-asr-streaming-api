@@ -2,8 +2,9 @@
 
 Thin WebSocket service for running NVIDIA Nemotron 3.5 ASR Streaming from a DGX Spark or other NVIDIA GPU node. The service exposes a small OpenAI-Realtime-like transcription API and keeps model inference NeMo-native.
 
-The Docker image is based on `nvcr.io/nvidia/nemo:26.06`, matching the
-Nemotron 3.5 ASR model card's NeMo 26.06 runtime.
+The Docker image is based on `nvcr.io/nvidia/nemo:26.04`, the latest published
+NeMo container tag currently available on NGC. The base image is configurable
+with `--build-arg BASE_IMAGE=...` when NVIDIA publishes a newer compatible tag.
 
 ## Architecture
 
