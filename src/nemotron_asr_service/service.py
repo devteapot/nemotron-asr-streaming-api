@@ -61,13 +61,14 @@ class RealtimeAsrServer:
     async def handle_websocket(self, websocket: WebSocket) -> None:
         await websocket.accept()
         if not await self._try_acquire_session():
-            await websocket.send_json(error_event("session limit reached", "session_limit_reached"))
+            await self._send_json(websocket, error_event("session limit reached", "session_limit_reached"))
             await websocket.close(code=1008)
             return
 
         try:
             state = self._create_connection_state()
-            await websocket.send_json(session_created_event(state.session_id, state.settings))
+            if not await self._send_json(websocket, session_created_event(state.session_id, state.settings)):
+                return
             await self._receive_loop(websocket, state)
         finally:
             await self._release_session()
@@ -82,17 +83,27 @@ class RealtimeAsrServer:
             try:
                 message = json.loads(raw)
             except json.JSONDecodeError:
-                await websocket.send_json(error_event("message must be valid JSON"))
+                if not await self._send_json(websocket, error_event("message must be valid JSON")):
+                    return
                 continue
 
             if not isinstance(message, dict):
-                await websocket.send_json(error_event("message must be a JSON object"))
+                if not await self._send_json(websocket, error_event("message must be a JSON object")):
+                    return
                 continue
 
             try:
                 await self._handle_message(websocket, state, message)
+            except WebSocketDisconnect:
+                return
+            except RuntimeError as exc:
+                if _is_closed_websocket_error(exc):
+                    return
+                if not await self._send_json(websocket, error_event(str(exc))):
+                    return
             except Exception as exc:
-                await websocket.send_json(error_event(str(exc)))
+                if not await self._send_json(websocket, error_event(str(exc))):
+                    return
 
     async def _handle_message(self, websocket: WebSocket, state: ConnectionState, message: dict) -> None:
         event_type = message.get("type")
@@ -249,3 +260,18 @@ class RealtimeAsrServer:
     async def _release_session(self) -> None:
         async with self._active_lock:
             self._active_sessions = max(0, self._active_sessions - 1)
+
+    async def _send_json(self, websocket: WebSocket, event: dict[str, object]) -> bool:
+        try:
+            await websocket.send_json(event)
+            return True
+        except WebSocketDisconnect:
+            return False
+        except RuntimeError as exc:
+            if _is_closed_websocket_error(exc):
+                return False
+            raise
+
+
+def _is_closed_websocket_error(exc: RuntimeError) -> bool:
+    return 'Cannot call "send" once a close message has been sent' in str(exc)

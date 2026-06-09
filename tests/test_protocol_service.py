@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 from contextlib import nullcontext
 from dataclasses import dataclass
 
 import numpy as np
 import pytest
+from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from nemotron_asr_service.app import create_app
 from nemotron_asr_service.backend import NemoStreamingSession, TranscriptUpdate
 from nemotron_asr_service.config import AsrSettings, Settings, VadSettings
+from nemotron_asr_service.service import ConnectionState, RealtimeAsrServer
 from nemotron_asr_service.vad import VadUpdate, _load_silero_model
 
 
@@ -191,6 +194,31 @@ def test_nemo_streaming_session_reprocesses_accumulated_audio_for_partials():
     assert session.finalize().text == "16000 samples"
 
 
+def test_receive_loop_treats_disconnect_during_send_as_normal_teardown():
+    async def run_test():
+        server = RealtimeAsrServer(
+            settings=_settings(),
+            backend=FakeBackend(),
+            vad_factory=lambda settings: FakeVad(settings),
+        )
+        state = ConnectionState(
+            session_id="sess_test",
+            settings=_settings().session_defaults(),
+            asr=FakeAsrSession(),
+            vad=None,
+        )
+        websocket = FakeDisconnectDuringSendWebSocket()
+
+        async def raise_disconnect(_websocket, _state, _message):
+            raise WebSocketDisconnect()
+
+        server._handle_message = raise_disconnect
+        await server._receive_loop(websocket, state)
+        assert websocket.sent == []
+
+    asyncio.run(run_test())
+
+
 def _settings(max_sessions: int = 1, turn_detection: str | None = "server_vad") -> Settings:
     return Settings(
         model_path="/tmp/fake.nemo",
@@ -250,3 +278,18 @@ class FakeNemoBuffer:
 
     def is_buffer_empty(self):
         return self._empty
+
+
+class FakeDisconnectDuringSendWebSocket:
+    def __init__(self) -> None:
+        self.sent: list[dict[str, object]] = []
+        self._received = False
+
+    async def receive_text(self) -> str:
+        if self._received:
+            raise AssertionError("receive loop should stop after disconnect")
+        self._received = True
+        return '{"type":"input_audio_buffer.commit"}'
+
+    async def send_json(self, event: dict[str, object]) -> None:
+        self.sent.append(event)
